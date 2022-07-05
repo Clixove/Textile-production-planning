@@ -1,5 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+from pandas_profiling import ProfileReport
+import sqlite3
 
 # %% Distribution of utilities of the orders.
 y_test_df = pd.read_pickle('raw/dea_orders_utility.pkl')
@@ -26,3 +28,21 @@ ax2.set_ylabel('Count')
 ax2.legend()
 f2.savefig('results/bootstrap_DTY.svg')
 plt.close(f2)
+
+# %% Data profiling.
+con = sqlite3.connect('data/H_company.db')
+with open('sql/batches_FDY.sql', 'r') as f:
+    orders = pd.read_sql(f.read(), con)
+con.close()
+profile = ProfileReport(orders, title='DEA data', plot={'dpi': 200, 'image_format': 'png'}, interactions=None)
+profile = profile.to_html()
+with open('results/dea_data_distribution.html', 'w') as f:
+    f.write(profile)
+
+orders_transformer = pd.read_pickle('raw/dea_ppr.pkl')
+orders_processed = orders_transformer.transform(orders)
+profile = ProfileReport(orders_processed, title='DEA data pre-processed', plot={'dpi': 200, 'image_format': 'png'},
+                        interactions=None)
+profile = profile.to_html()
+with open('results/dea_data_processed_distribution.html', 'w') as f:
+    f.write(profile)

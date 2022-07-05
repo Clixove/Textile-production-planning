@@ -17,15 +17,17 @@ transformer = Pipeline([
     ('drop_batch_id', DropColumn(cols=['batch_id'])),
     ('force_float_64', ForceFloat64()),
     ('ln_x', ApplyColumn(cols=['total_weight', 'total_price', 'total_weight_inhist'],
-                         func=np.log, new_cols_prefix='log', inplace=True)),
-    ('reverse_scarcity', ApplyColumn(cols=['total_weight_inhist_log'],
-                                     new_cols=['scarcity'], func=float.__neg__, inplace=True)),
-    ('remove_abnormal', GaussianAbnormal(cols=['quality', 'customer_level', 'total_weight_log', 'total_price_log',
-                                               'scarcity'])),
+                         new_cols=['ln_total_weight', 'ln_total_price', 'ln_total_weight_inhist'],
+                         func=np.log)),
+    ('reverse_scarcity', ApplyColumn(cols=['ln_total_weight_inhist'], new_cols=['NGL_total_weight_inhist'],
+                                     func=float.__neg__)),
+    ('drop', DropColumn(cols=['total_weight', 'total_price', 'total_weight_inhist', 'ln_total_weight_inhist'])),
+    ('remove_abnormal', GaussianAbnormal(cols=['quality', 'customer_level', 'ln_total_weight', 'ln_total_price',
+                                               'NGL_total_weight_inhist'])),
     ('zipping', MinMaxScaler(clip=True)),
-    ('sort_in_out', ArrayExchangeColumn(col_order=[0, 2, 4, 1, 3],
-                                        col_names=['in_quality', 'in_weight', 'in_scarcity', 'out_customer_level',
-                                                   'out_price']))
+    ('sort_in_out', ArrayToVariable(col_order=[0, 2, 4, 1, 3],
+                                    col_names=['in_quality', 'in_weight', 'in_scarcity', 'out_customer_level',
+                                               'out_price']))
 ])
 x_train = transformer.fit_transform(orders_h)
 pd.to_pickle(transformer, 'raw/dea_ppr.pkl')

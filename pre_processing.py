@@ -3,7 +3,7 @@ from sklearn.base import TransformerMixin
 import numpy as np
 
 
-class ArrayExchangeColumn(TransformerMixin):
+class ArrayToVariable(TransformerMixin):
     def __init__(self, col_order=None, col_names=None):
         self.col_order = col_order
         self.col_names = col_names
@@ -32,25 +32,17 @@ class DropColumn(TransformerMixin):
 
 
 class ApplyColumn(TransformerMixin):
-    def __init__(self, cols=None, func=None, new_cols=None, new_cols_prefix=None, inplace=False):
+    def __init__(self, cols=None, func=None, new_cols=None):
         self.cols = cols
         self.func = func
-        if new_cols:
-            assert len(cols) == len(new_cols), 'Lists of old and new column names should have the same length.'
-            self.new_cols = new_cols
-        elif new_cols_prefix:
-            self.new_cols = [f'{x}_{new_cols_prefix}' for x in cols]
-        else:
-            self.new_cols = cols
-        self.inplace = inplace
+        assert len(cols) == len(new_cols), 'Lists of old and new column names should have the same length.'
+        self.new_cols = new_cols
 
     def fit(self, x, *args, **kwargs):
         return self
 
     def transform(self, x, *args, **kwargs):
         x_ = x.copy()
-        if self.inplace:
-            x_.drop(self.cols, axis=1, inplace=True)
         for old_col, new_col in zip(self.cols, self.new_cols):
             x_[new_col] = x[old_col].apply(self.func)
         return x_
@@ -84,14 +76,13 @@ class GaussianAbnormal(TransformerMixin):
                 x_.loc[x[col] < self.lower_bound[col], col] = self.lower_bound[col]
         return x_
 
-    @staticmethod
-    def inverse_transform(x, *args, **kwargs): return x
-
 
 class ForceFloat64(TransformerMixin):
     def __init__(self): pass
 
-    def fit(self, x, *args, **kwargs): return self
+    def fit(self, x, *args, **kwargs):
+        return self
 
     @staticmethod
-    def transform(x, *args, **kwargs): return x.astype('float64')
+    def transform(x, *args, **kwargs):
+        return x.astype('float64')
