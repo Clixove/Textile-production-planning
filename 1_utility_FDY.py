@@ -24,7 +24,7 @@ transformer = Pipeline([
     ('drop', DropColumn(cols=['total_weight', 'total_price', 'total_weight_inhist', 'ln_total_weight_inhist'])),
     ('remove_abnormal', GaussianAbnormal(cols=['quality', 'customer_level', 'ln_total_weight', 'ln_total_price',
                                                'NGL_total_weight_inhist'])),
-    ('zipping', MinMaxScaler(clip=True)),
+    ('zipping', MinMaxScaler()),
     ('sort_in_out', ArrayToVariable(col_order=[0, 2, 4, 1, 3],
                                     col_names=['in_quality', 'in_weight', 'in_scarcity', 'out_customer_level',
                                                'out_price']))
