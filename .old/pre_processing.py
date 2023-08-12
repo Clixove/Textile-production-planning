@@ -49,7 +49,7 @@ class ApplyColumn(TransformerMixin):
 
 
 class GaussianAbnormal(TransformerMixin):
-    def __init__(self, cols=None, std_range=3, upper_only=False):
+    def __init__(self, cols=None, std_range=3):
         """
         Move abnormal values into "mean ± std_range * std" assuming variables satisfying Gaussian distribution.
         :param cols: The columns to perform Gaussian abnormal processing.
@@ -59,21 +59,17 @@ class GaussianAbnormal(TransformerMixin):
         self.std_range = std_range
         self.lower_bound = None
         self.upper_bound = None
-        self.upper_only = upper_only
 
     def fit(self, x, *args, **kwargs):
-        average = np.nanmean(x[self.cols], axis=0)
-        stdev = np.nanstd(x[self.cols], axis=0)
-        self.lower_bound = dict(zip(self.cols, average - self.std_range * stdev))
-        self.upper_bound = dict(zip(self.cols, average + self.std_range * stdev))
+        mean_ = np.nanmean(x, axis=0)
+        std_3 = self.std_range * np.nanstd(x, axis=0)
+        self.lower_bound = mean_ - std_3
+        self.upper_bound = mean_ + std_3
         return self
 
     def transform(self, x, *args, **kwargs):
         x_ = x.copy()
-        for col in self.cols:
-            x_.loc[x[col] > self.upper_bound[col], col] = self.upper_bound[col]
-            if not self.upper_only:
-                x_.loc[x[col] < self.lower_bound[col], col] = self.lower_bound[col]
+        x_[self.cols] = x[self.cols].clip(lower=self.lower_bound, upper=self.upper_bound, axis=1)
         return x_
 
 

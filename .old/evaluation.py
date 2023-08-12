@@ -30,8 +30,8 @@ f2.savefig('results/bootstrap_DTY.svg')
 plt.close(f2)
 
 # %% Data profiling.
-con = sqlite3.connect('data/H_company.db')
-with open('sql/batches_FDY.sql', 'r') as f:
+con = sqlite3.connect('../data/H_company.db')
+with open('../sql/batches_FDY.sql', 'r') as f:
     orders = pd.read_sql(f.read(), con)
 con.close()
 profile = ProfileReport(orders, title='DEA data', plot={'dpi': 200, 'image_format': 'png'}, interactions=None)

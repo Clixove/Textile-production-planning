@@ -6,8 +6,8 @@ import numpy as np
 from tqdm import tqdm
 
 # %% read data
-con = sqlite3.connect('data/H_company.db')
-with open('sql/spinning_efficiency_FDY.sql', 'r') as f:
+con = sqlite3.connect('../data/H_company.db')
+with open('../sql/spinning_efficiency_FDY.sql', 'r') as f:
     efficiency = pd.read_sql(f.read(), con)
 con.close()
 

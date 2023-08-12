@@ -1,14 +1,16 @@
 import sqlite3
+
+import pandas as pd
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
 from dea import DEA
 from pre_processing import *
 
 # %% read historical orders
-con = sqlite3.connect('data/H_company.db')
-with open('sql/batches_hist_FDY.sql', 'r') as f:
+con = sqlite3.connect('../data/H_company.db')
+with open('../sql/batches_hist_FDY.sql', 'r') as f:
     orders_h = pd.read_sql(f.read(), con)
-with open('sql/batches_FDY.sql', 'r') as f:
+with open('../sql/batches_FDY.sql', 'r') as f:
     orders = pd.read_sql(f.read(), con)
 con.close()
 
