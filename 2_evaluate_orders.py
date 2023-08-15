@@ -1,7 +1,6 @@
 import sqlite3
-import pandas as pd
 from math import log
-import pickle
+import pandas as pd
 from DEA import DEA
 
 # %% Load training set.
