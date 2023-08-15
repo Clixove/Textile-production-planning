@@ -45,6 +45,7 @@ class DEA(TransformerMixin):
 
     def transform(self, x):
         n = x.shape[0]
+        output_mat = x[self.output_cols].values
         z_input = np.zeros(shape=self.n_input_var)
         inequality_left = np.hstack([self.output_mat, - self.input_mat])
         inequality_right = np.zeros(shape=self.n)
@@ -53,7 +54,7 @@ class DEA(TransformerMixin):
 
         def parallel_dea(i):
             opt = linprog(
-                c=np.hstack([- self.output_mat[i, :], z_input]),
+                c=np.hstack([- output_mat[i, :], z_input]),
                 A_ub=inequality_left, b_ub=inequality_right,
                 A_eq=np.hstack([z_output, self.input_mat[i:i + 1, :]]), b_eq=equality_right,
                 method='highs'
@@ -62,4 +63,4 @@ class DEA(TransformerMixin):
 
         with tqdm_joblib(tqdm(total=n)):
             solution = joblib.Parallel(n_jobs=-1)(joblib.delayed(parallel_dea)(i) for i in range(n))
-        return np.array(solution)
+        return np.maximum(np.minimum(solution, 1), 0)

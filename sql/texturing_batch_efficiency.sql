@@ -1,4 +1,4 @@
-select o.batch_id, s.efficiency, sum(o.weight) as capacity
+select o.batch_id, s.efficiency, sum(o.weight) as capacity, date(start_time) as first_appear
 from orders o join
 (select batch_id, sum((julianday(end_time) - julianday(start_time)) * efficieny) /
                  sum(julianday(end_time) - julianday(start_time)) as efficiency,
