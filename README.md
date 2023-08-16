@@ -1,249 +1,215 @@
 # Textile production planning
 
-Production planning of textile orders: evaluating, allocating, and scheduling
-
-## Introduction
-
-This project provides an example of textile enterprise, H company, to explain how to evaluate orders, allocate them to factories (managed by the enterprise), and provides the schedule or production plan for each factory.
-
-The framework is shown as follow.
-
-![](docs/framework.svg)
-
-We combine the orders to "batches". Each batch is derived by multiple orders, with different customers, weight, price but the same production and specification. The orders are combined with the following rule:
-
-- Most recent created time
-
-- Sum of weight, Sum of price weighted by the weight
-
-- Mean of quality weighted by the weight
-
-In the first step, we evaluate the utility of batches based on the total weight, total price, whether the specification is common, textile's quality, and the quality of customer [^fn1].
-
-[^fn1]: The quality of the customer is assessed based on his historical orders by external model.
-
-In the second step, we evaluate the efficient of each factory to produce each production based on historical records. With the utility of batches and the efficient, we allocate the batches to different factories.
-
-In the third step, we schedule the batches in each factory, to reach the optimal workload for each machine and each day. The aim is to improve the efficiency and reduce the number of overdue bathes.
+Decision making of textile production in H company: customer management and production tasks distribution
 
 ## Database
 
-The database is driven by SQLite3. The diagram of the database is shown as following.
-
-![Relational diagram, powered by yFiles](docs/H_company_diagram.svg)
-
-**customers_level**
-
-Convert the quality of the customer from the Chinese alias (defined by H company) to an ordinal variable. Level 1 is the worst customers and 5 is the best customers.
-
-| Name  | Type    | Description                                                                           |
-| ----- | ------- | ------------------------------------------------------------------------------------- |
-| name  | text    | Chinese alias of the quality of the customer, defined by H company                    |
-| level | integer | Ordinal variable, the quality of the customer, where 1 is the worst and 5 is the best |
+File `data/H_company.db` is a SQLite database, which includes records of textile (chemical fiber) production in H company.
 
 **customers**
 
-The quality of the customers, where the ordinal relationship of different customer levels is shown in table "customers_level".
+The quality of the customers measured by H company.
 
-| Name       | Type | Description                                                                                                                        |
-| ---------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| id         | text | customer's identifier                                                                                                              |
-| name       | text | customer's company name                                                                                                            |
-| production | text | the production that the customer buys; one company can have multiple levels if it buys multiple kinds of production from H company |
-| level      | text | Chinese alias of the quality of the customer, defined by H company                                                                 |
+| Name        | Type    | Description                                                  |
+| ----------- | ------- | ------------------------------------------------------------ |
+| customer_id | text    | customer's identifier                                        |
+| parts       | text    | the production that the customer buys; one company can have multiple records if buying multiple parts from H company |
+| score       | integer | the score of the customer, ranges 1\~5                       |
 
 **factories**
 
 The factories managed by H company.
 
-| Name | Type | Description          |
-| ---- | ---- | -------------------- |
-| id   | text | Factory's identifier |
-| name | text | Factory's name       |
+Each factory manages multiple batches. Each batch has the same production settings. Production tasks assigned to the same batch number must produce the same type of textile. I don't know the relationship between batch, factory, parts and specification in advance, but look up them from orders. (See the view "batches".)
 
-**orders** and **orders_historical**
+| Name       | Type | Description          |
+| ---------- | ---- | -------------------- |
+| factory_id | text | Factory's identifier |
 
-The orders are created from 2020-10-12 to 2020-11-21, that is the period we analyze. The historical orders are created earlier than 2020-10-12. We use these orders to estimate the quantile of the price and weight, as the measurements of the analyzed order's utility.
+**orders**
 
-| Name          | Type     | Description                                                                |
-| ------------- | -------- | -------------------------------------------------------------------------- |
-| order_id      | text     | The order's identifier                                                     |
-| created_time  | datetime | When the order is received                                                 |
-| customer_name | text     | The customer which sends the order                                         |
-| factory_id    | text     | The factory which works on the order (ground truth of the allocating step) |
-| weight        | real     | The weight of ordered textile                                              |
-| production    | text     | The production type of ordered textile                                     |
-| specification | text     | The specification of ordered textile                                       |
-| price         | real     | The price of 1KG ordered production                                        |
-| voucher       | real     | The discount amount of this order                                          |
-| quality       | real     | The quality of ordered  textile                                            |
-| batch_id      | text     | The batch's identifier                                                     |
+The orders placed by customers. 
 
-**spinning** and **spinning_efficiency**
+When an order is placed, H company will allocate a batch according to the specification. Then, H company checks whether there is stocked production. If there is, it will ship; if not, it will start producing. The batches distributed to 5 of the factories recorded efficiency. Among which, there are 40 batches in 2 factories records efficiency of spinning, and 218 batches in 3 factories records efficiency of texturing. The records of efficiency in spinning and texturing don't have common batches or factories. Other batches don't record efficiency.
 
-Spinning produces FDY and POY. They input melted polyester to the workshop, and the machines output FDY or POY. The "spinning" table is the production log corresponding to batches in "orders" table, which functions as the ground truth of evaluating and scheduling process in the analyzed period. The "spinning_efficiency" table is the production log earlier than 2020-10-12, which is used to estimate the efficient of assembly lines.
+| Name          | Type    | Description                                     |
+| ------------- | ------- | ----------------------------------------------- |
+| order_id      | integer | the order's identifier                          |
+| created_time  | text    | datetime when the order is received             |
+| customer_id   | text    | the customer's identifier who placed the order  |
+| batch_id      | text    | the batch's identifier                          |
+| factory_id    | text    | the factory's identifier who works on the order |
+| weight        | real    | the weight of ordered textile (KG)              |
+| parts         | text    | the production type of ordered textile          |
+| specification | text    | the specification of ordered textile            |
+| price         | real    | the price of 1KG ordered production (CNY 2020)  |
+| voucher       | real    | the discount amount of this order (CNY 2020)    |
+| quality       | real    | the quality of ordered textile, ranged 1\~5     |
 
-| Name             | Type | Description                                                                                                                                                                                   |
-| ---------------- | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| factory_id       | text | The factory's identifier                                                                                                                                                                      |
-| line_id          | text | The assembly line's identifier                                                                                                                                                                |
-| date             | text | The date of the shift                                                                                                                                                                         |
-| daynight         | text | Whether the shift is day or night ("白班" is day shift and "夜班" is night shift)                                                                                                                 |
-| batch_id         | text | The batch's identifier                                                                                                                                                                        |
-| abandoned_bobbin | real | The machine outputs fibers from melted polyester and wind the fibers on the bobbin. This attribute measures the amount of abandoned bobbins with fibers, where the unit of number is unknown. |
-| small_bobbin     | real | The amount of bobbins with small amount of fibers                                                                                                                                             |
-| middle_bobbin    | real | The amount of bobbins with middle amount of fibers                                                                                                                                            |
-| large_bobbin     | real | The amount of bobbins with large amount of fibers                                                                                                                                             |
-| full_bobbin      | real | The amount of full bobbins, where the amount of fibers is as designed                                                                                                                         |
+**spinning**
 
-**texturing_efficiency**
+Spinning produces FDY and POY from melted polyester, and wind the fibers on the bobbin. 
 
-Texturing produces DTY from the output of spinning. This table is the production log earlier than 2020-10-12, which is used to measure the efficiency of texturing assembly lines.
+This table tracks to 40 batches in orders. **If one shift has multiple records, I have summarized the production and scrap rate. In this dataset, it's guaranteed `(batch_id, date, night)` is unique.**
 
-| Name           | Type     | Description                                                                                        |
-| -------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| factory_name   | text     | The factory's name                                                                                 |
-| room_name      | text     | The workshop's name                                                                                |
-| machine_id     | text     | The machine's identifier                                                                           |
-| batch_id       | text     | The batch's identifier                                                                             |
-| start_time     | datetime | When the production log starts                                                                     |
-| end_time       | datetime | When the production log ends                                                                       |
-| speed          | real     | The producing speed of the machine. The unit of number is unknown.                                 |
-| spindle_num    | integer  | The number of spindles in the machine                                                              |
-| actual_dtex    | real     | 1dtex = 1 grams per 10,000 meters of yarn. This attribute records the actual "dtex" in this batch. |
-| efficient_coef | real     | efficient coefficient                                                                              |
+| Name       | Type    | Description                                                  |
+| ---------- | ------- | ------------------------------------------------------------ |
+| batch_id   | text    | the batch's identifier                                       |
+| date       | text    | the date of shift                                            |
+| night      | integer | whether the night shift                                      |
+| production | real    | the mass of total production (KG)                            |
+| scrap_rate | real    | the mass of abandoned bobbin over total mass of bobbins, in percentage ranged 0\~100, efficiency is 100 / (100 + scrap_rate) |
 
-## Functions
+**texturing**
 
-The production log is not well-organized, so we only use FDY orders and production log  of spinning for analysis. The time period of 2020-10-12 to 2020-11-21 is "current" and the time period before 2020-10-12 is historical.
+Texturing produces DTY from the output of spinning.
 
-We aim to provide production plan for current period based on statistics of historical period.
+This table tracks to 218 batches in orders. The efficiency of the same batch may change in different weather. **I have manually adjusted with concerns to correct the mistakes of workers recording the time range (from `start_time` to `end_time`). In this dataset, it's guaranteed the time ranges for each `batch_id` don't overlap.**
 
-### 1. Data pre-processing
+| Name       | Type | Description                                                  |
+| ---------- | ---- | ------------------------------------------------------------ |
+| batch_id   | text | the batch's identifier                                       |
+| start_time | text | datetime when the record starts                              |
+| end_time   | text | datetime when the record ends (machine isn't always open in the time range) |
+| efficiency | real | efficiency coefficient on the machine, ranged 0\~1           |
 
-**Orders**
+## Tutorial
 
-H company tracks the production process by batch identifier, so we group the orders into batches. In this step, we input the current orders and historical orders, and expect the script to output batches and historical batches.
+The script  [1_date_distribution.py](1_date_distribution.py)  shows the distribution of dates of the orders. I split orders in first 80% dates to training set, where `created_time <= '2020-09-06'`; and orders in last 20% dates to testing set, where `created_time > '2020-09-06'`. 
 
-The script to retrieve current orders is `sql/batches_FDY.sql` and that to retrieve historical order is `sql/batches_hist_FDY.sql`.
+I use 3 metrics to represent the benefits of each order, and 3 other metrics to represent the cost of each order.
 
-We group orders into batches with the following rules:
+Benefits:
 
-- Sum of textile's weight
+- Amount of money earned from the order.
+- Customer score. (If the customer has a higher order, giving priority to this order is good to maintain valuable customer relationship.)
+- Logarithmic of weight. (Larger orders are preferred to dilute fixed costs, such as selling fee and warehouse rental fee, of each order.)
 
-- Sum of total price, where for each order, total price is "weight * price - voucher"
+Costs:
 
-- Scarcity of specification, represented by the sum of the specification's weight in historical orders
+- Weight of raw materials. (Assume equal to weight of the production.)
+- Quality of raw materials. (Higher-quality products need more costs of quality control.)
+- Rarity of raw materials. (Rare specification adds more difficulty. Rarity is calculated based on weight of the production historically ordered.)
 
-- Average of textile's quality, weighted by textile's weight. we convert each quality to an ordinal variable by the following table.
+*Assumption: the values of benefits and costs of all orders should be positive. (Required by DEA)*
 
-| Start with | AAA | AA  | A   | B   |
-| ---------- | --- | --- | --- | --- |
-| Value      | 4   | 3   | 2   | 1   |
+To find the formula that how I calculate the values, read these queries which retrieve the values of benefits and costs of each order:
 
-The customer's level should be the same for orders in the same batch.
+- The training set  [orders_benefit_cost_train.sql](sql\orders_benefit_cost_train.sql)  
+- The testing set  [orders_benefit_cost_test.sql](sql\orders_benefit_cost_test.sql)  
 
-**Efficiency**
+| Name       | Type    | Description                    |
+| ---------- | ------- | ------------------------------ |
+| order_id   | integer | the order's identifier         |
+| b_payment  | real    | benefit: amount of money       |
+| b_customer | integer | benefit: customer score        |
+| b_scale    | real    | benefit: logarithmic of weight |
+| c_material | real    | cost: weight of raw materials  |
+| c_quality  | integer | cost: quality of raw materials |
+| c_rarity   | real    | cost: rarity of raw materials  |
 
-FDY textile involves in only spinning. We use historical production log of spinning to evaluate the efficiency of each assembly line. In this step, we input historical log of spinning and expect the script to output efficiency of each assembly line.
+We use data enveloping analysis to measure the efficiency of each order.
 
-The efficiency of each shift is represented by "one minus the ratio of textile on abandoned bobbins over textile on all bobbins". The efficiency of each batch is that of the mean of all shifts producing textile in this batch.
+### Data enveloping analysis
 
-The script to retrieve efficiency is `sql/spinning_efficiency_FDY.sql`.
+Assume the values of benefits of the current order are $y_{0,1}, ...,y_{0,p}$ where $k$ is the number of benefits. The values of costs of the current order are $x_{k, 1}, ... x_{k, q}$ where $m$ is the number of costs.
 
-### 2. Data enveloping analysis
-
-With batches and efficiency, we aim to evaluate the batches. H company prefer to plan batches with higher utilities. We use data enveloping analysis to implement this step, which is a multi-input and multi-output operation method.
-
-The script of this step is `1_utility_FDY.py`.
-
-Following section 1, we retrieve 5 variables as the following table.
-
-| Name                | Type | Description                                                                         |
-| ------------------- | ---- | ----------------------------------------------------------------------------------- |
-| batch_id            | text | The identifier of this batch.                                                       |
-| total_weight        | real | The total weight of textile in this batch.                                          |
-| total_price         | real | The total price of textile in this batch.                                           |
-| total_weight_inhist | real | The weight of textile in historical batches which have the same specification.      |
-| quality             | real | The mean of the quality of textile in this batch, weighted by the textile's weight. |
-| customer_level      | real | The level of the customer who ordered textile in this batch.                        |
-
-We construct a pipeline to perform data pre-processing.
-
-1. For "total_weight" and "total_price", perform $x \to \ln x$.
-
-2. For "total_weight_inhist", perform $x \to - \ln x$.
-
-3. Denote $\bar x$ as the mean of each variable and $\sigma(x)$ as the standard deviation of each variable. For all variables, assign outliers which is smaller than $\bar x - 3 \sigma(x)$ to $\bar x - 3 \sigma(x)$. Assign outliers which is larger than $\bar x + 3 \sigma(x)$ to $\bar x + 3 \sigma(x)$.
-
-4. For all variables, perform $x \to \frac{x - \min x}{\max x - \min x}$.
-
-After pre-processing we obtain 5 variables, where "quality", "total_weight", and "total_weight_inhist" are input variables, and "customer_level" and "total_price" are output variables.
-
-Assuming a total of $N$ historical batches, the value of the output indicators of a batch $i$ are $y_{i,1},y_{i,2},...,y_{i,k}$, and the input indicators are $x_{i,1},x_{i,2},...,x_{i,m}$.
-
-The utility of batch $i$ is $θ_i$, which is the value of target function of
+The efficiency of the current order is $\theta_0$, the solution of LP(1). Denote the orders in the training set are $i=1,...,N$.
 
 $$
 \begin{aligned}
-\max & \quad \theta_i = \frac{\sum_{j=1}^k y_{i,j} u_{i,j}}{\sum_{j=1}^m x_{i,j} v_{i,j}} \\
-s.t. & \quad \forall n=1,2,...,N, \quad \theta_n = \frac{\sum_{j=1}^k y_{n,j} u_{n,j}}{\sum_{j=1}^m x_{n,j} v_{n,j}} \leq 1 \\
-& \quad u_{i,1}, u_{i, 2}, ..., u_{i,k}, v_{i,1}, v_{i,2}, ..., v_{i, m} \geq 0
-\end{aligned}
+\max & \quad \theta_0 = \frac{\sum_{j=1}^k y_{0,j} u_{0,j}}{\sum_{j=1}^m x_{0,j} v_{0,j}} \\
+s.t. & \quad \theta_i = \frac{\sum_{j=1}^k y_{i,j} u_{i,j}}{\sum_{j=1}^m x_{i,j} v_{i,j}} \leq 1,
+\forall i=1,...,N \\
+& \quad u_{i,1}, ..., u_{i,k}, v_{i,1}, ..., v_{i, m} \geq 0
+\end{aligned} \tag{1}
 $$
 
-We do linearization using the properties of 
+Because $\theta_i \leq 1$ and  $\sum_{j=1}^k y_{i,j} u_{i,j} \geq 0, \sum_{j=1}^m x_{i,j} v_{i,j} \geq 0$, there is $\sum_{j=1}^k y_{i,j} u_{i,j} - \sum_{j=1}^m x_{i,j} v_{i,j} \leq 0$.
 
-$$
-\frac{a}{b} \leq 1 \quad and \quad a,b \geq 0 \quad \Leftrightarrow \quad a-b \leq 0.
-$$
-
-Equivalently, we have
+We do linearization using this properties, thus LP(1) is transformed to LP(2).
 
 $$
 \begin{aligned}
-\max & \quad \theta_i = \sum_{j=1}^k y_{i,j}u_{i,j} \\
-s.t. & \quad \forall n=1,2,...,N, \sum_{j=1}^k y_{n,j}u_{n,j} - \sum_{j=1}^m x_{n,j} v_{n,j} \leq 0 \\
-& \quad \sum_{j=1}^m x_{i,j}v_{i,j} = 1 \\
-& \quad u_{i,1}, u_{i, 2}, ..., u_{i,k}, v_{i,1}, v_{i,2}, ..., v_{i, m} \geq 0
-\end{aligned}
+\max & \quad \theta_0 = \sum_{j=1}^k y_{0,j} u_{0,j} \\
+s.t. & \quad \sum_{j=1}^k y_{i,j} u_{i,j} - \sum_{j=1}^m x_{i,j} v_{i,j} \leq 0,
+\forall i=1,...,N \\
+& \quad \sum_{j=1}^m x_{0,j} v_{0,j} = 1 \\
+& \quad u_{i,1}, ..., u_{i,k}, v_{i,1}, ..., v_{i, m} \geq 0
+\end{aligned} \tag{2}
 $$
 
-where $u, v$ are the internal parameters of the model, representing the weights of input and output indicators. According to the linear programming results of this model, the performance of each batch can be obtained, although the dimension of the input and output indicators are larger than 1.
+In LP(2), $\mathbf{u, v}$ are variables, representing the weights of benefits and costs. The solution of $\theta_0$ is efficiency of each order. In the training set, there is always $\theta_0 \in [0, 1]$; in the testing set, we use a clip function $\theta_0 \to \max(0, \min(\theta_0, 1))$ to force $\theta_0 \in [0, 1]$.
 
-### 3. Assignment
 
-The efficiency of each spinning assembly line is 
 
-$$
-1 - \mathrm{\frac{abandoned\ bobbins}{all\ bobbins}}
-$$
+The results of orders' efficiency (in both training and testing set) are saved in DEA table in the database.
 
-The quantile of efficiency for any current batch in the population of all historical batches is $q_e$. Similarly, we find the quantile of utility of batches is $q_u$ from section 2. 
+| Name       | Type    | Description                                           |
+| ---------- | ------- | ----------------------------------------------------- |
+| order_id   | integer | the order's identifier                                |
+| efficiency | real    | DEA efficiency coefficient of this order, ranged 0\~1 |
 
-We define a cost matrix $C = q_e q_u$, which represents the utility of each batch-line assignment. Also, we have some pre-processing steps
+In [ground truth](https://en.wikipedia.org/wiki/Ground_truth#Statistics_and_machine_learning), some orders are allocated to batches that I lose track of; other orders are allocated to batches, whose production is tracked in spinning and texturing table. The following analysis are focused only on those whose batches are tracked. To filter these orders, I provide the following queries:
 
-1. Sort the batches with descending order of utility.
+- Tracked in spinning table, training set  [spinning_orders_train.sql](sql\spinning_orders_train.sql) 
+- Tracked in spinning table, testing set  [spinning_orders_test.sql](sql\spinning_orders_test.sql) 
+- Tracked in texturing table, training set  [texturing_orders_train.sql](sql\texturing_orders_train.sql) 
+- Tracked in texturing table, testing set  [texturing_orders_test.sql](sql\texturing_orders_test.sql) 
 
-2. Truncate the array of batches into blocks, where the number of batches in each of the blocks should be strictly smaller than the number of lines.
+On one hand, we have known the efficiency of orders by DEA, which represents the benefits of this order. The results have the following structure.
 
-We use maximum assignment optimization to implement the allocation of  batches. If the batch $i$ is assigned to the line $j$, we have $x_{ij} = 1$; otherwise, we have $x_{ij} = 0$.
+| Name       | Type    | Description                                             |
+| ---------- | ------- | ------------------------------------------------------- |
+| order_id   | integer | the order's identifier                                  |
+| efficiency | real    | DEA efficiency coefficient of this order, ranged 0\~1   |
+| weight     | integer | the weight of ordered product, rounded to integer (KG)  |
+| batch_id   | text    | the ground truth: which batch the order is allocated to |
+
+On the other hand, we can read the efficiency of each batch via its historical production records in spinning and texturing tables. The queries are written in  [texturing_batch_efficiency.sql](sql\texturing_batch_efficiency.sql) and  [spinning_batch_efficiency.sql](sql\spinning_batch_efficiency.sql)
+
+| Name                     | Type | Description                                                  |
+| ------------------------ | ---- | ------------------------------------------------------------ |
+| batch_id                 | text | the batch's identifier                                       |
+| scrap_rate \| efficiency | real | see the meaning in "Database" section: "spinning/scrap_rate" and "texturing/efficiency" |
+| capacity                 | real | (not used) the total weight of production that the batch can handle in a specific period; simulated by the total weight the batch has produced in history |
+| first_appear             | text | (not used) the date when the efficiency of the batch is first recorded |
+
+*In the following context, I use min-cost flow algorithm to solve this assignment problem. Formally, I should consider the capacity of batches. However, I don't know the real capacity of these factories, and simulating the value by the total weight the batch has produced in history will make the assignment problem infeasible. So **I assume the capacity of each batch is infinity**, which means each batch can handle the production tasks of all allocated orders.*
+
+The ground truth provides an production plan, which is adopted by the real H company and allocates the filtered orders to the trackable batches. I aim to find an optimal production plan to allocate these orders to batches, which achieves the maximum overall benefits under the criteria I already find: DEA efficiency of orders and efficiency of batches.
+
+### Assignment problem
+
+Denote the efficiency of each order $i=1,...,N$ is $p_i$ and the efficiency of each batch $j=1,...,M$ is $q_j$. Denote unit cost matrix $C_{ij} = - p_i q_j$. Denote the matrix $\mathbf{x}$ is the production plan, where $x_{ij} = 1$ if and only if order $i$ is assigned to batch $j$. Denote the weight of production in order $i$ is $w_{i}$, and its amount allocated to batch $j$ is the variable $a_{ij}$. The optimal production plan is the solution of mixed integer programming MIP(3).
 
 $$
 \begin{aligned}
-\max & \quad z = \sum_{i, j} C_{ij} x_{ij} \\
-s.t. & \quad \sum_i x_{ij} = 1 \\
-     & \quad \sum_j x_{ij} \leq 1 \\
+\min & \quad z = \sum_{i=1}^N \sum_{j=1}^M C_{ij} x_{ij} a_{ij} \\
+s.t. & \quad \sum_{j=1}^M x_{ij} \geq 1, \forall i=1,...,N                 & \text{assignment} \\
+     & \quad \sum_{i=1}^N a_{ij} x_{ij} \leq +\infty, \forall j=1,...,N & \text{capacity (x)} \\
+     & \quad \sum_{j=1}^M a_{ij} x_{ij} = w_i, \forall i=1,...,N        & \text{supply} \\
      & \quad x_{ij} \in \{0, 1\}
-\end{aligned}
+\end{aligned} \tag{3}
 $$
 
-The first and second constraint means: each batch must be assigned to exactly 1 line, and each line can work on at most 1 batch.
+*The capacity constraint is disabled in this case.*
 
-The result of assignment $x_{ij}$ is the production plan. The efficiency of each batch is the average of each line's efficiency weighted by the total price of the batch. We use bootstrap to compare the assignment with random assignment.
+According to [this article](https://developers.google.com/optimization/flow/assignment_min_cost_flow), such weighted assignment problem can be solved by min-cost flow algorithm.
 
-## Citation
+The result $\mathbf{x}$ is the production plan, and $\mathbf{a}$ shows the weight of production of each allocation. With the optimal objective function, the overall efficiency is  $e = - {z^* \over \sum_{i=1}^N w_i}$. I compare the performance of our models with the production plan in real based on this metric.
 
-[1] Github - Mayorx/Hungarian-Algorithm: (Kuhn-Munkres) Numpy Implementation, Rectangular Matrix Is Supported (|X| <= |Y|). 100X100000 In 0.153 S. [Link](https://github.com/mayorx/hungarian-algorithm)
 
-[2] Charnes, Abraham, William W. Cooper, and Edwardo Rhodes. "Measuring the efficiency of decision making units." *European journal of operational research* 2.6 (1978): 429-444. [Link](https://personal.utdallas.edu/~ryoung/phdseminar/CCR1978.pdf)
+
+The results are saved in table `min_cost_flow_spinning` and `min_cost_flow_texturing`.
+
+| Name         | Type    | Description                                                  |
+| ------------ | ------- | ------------------------------------------------------------ |
+| order_id     | integer | the order's identifier $i$                                   |
+| order_weight | integer | weight of product in this order $w_i$                        |
+| allocate     | integer | weight of product in this order allocated to `batch_id` $a_{ij}$ |
+| batch_id     | text    | the batch's identifier $j$                                   |
+| efficiency   | real    | unit cost coefficient $- C_{ij}$                             |
+
+We perform [boostrapping](https://en.wikipedia.org/wiki/Bootstrapping_(statistics)) method to draw orders from the ground truth, and generate a null distribution of production plan. Then, we find the quantile of min-cost flow method to test whether it is significantly better. The statistics is the average efficiency weighted by allocated weight.
+
