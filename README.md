@@ -199,3 +199,17 @@ According to [this article](https://developers.google.com/optimization/flow/assi
 
 The result $\mathbf{x}$ is the production plan, and $\mathbf{a}$ shows the weight of production of each allocation. With the optimal objective function, the overall efficiency is  $e = - {z^* \over \sum_{i=1}^N w_i}$. I compare the performance of our models with the production plan in real based on this metric.
 
+
+
+The results are saved in table `min_cost_flow_spinning` and `min_cost_flow_texturing`.
+
+| Name         | Type    | Description                                                  |
+| ------------ | ------- | ------------------------------------------------------------ |
+| order_id     | integer | the order's identifier $i$                                   |
+| order_weight | integer | weight of product in this order $w_i$                        |
+| allocate     | integer | weight of product in this order allocated to `batch_id` $a_{ij}$ |
+| batch_id     | text    | the batch's identifier $j$                                   |
+| efficiency   | real    | unit cost coefficient $- C_{ij}$                             |
+
+We perform [boostrapping](https://en.wikipedia.org/wiki/Bootstrapping_(statistics)) method to draw orders from the ground truth, and generate a null distribution of production plan. Then, we find the quantile of min-cost flow method to test whether it is significantly better. The statistics is the average efficiency weighted by allocated weight.
+
